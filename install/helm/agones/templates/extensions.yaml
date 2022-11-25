@@ -53,7 +53,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: agones-validation-webhook
+  name: agones-{{ .Release.Namespace }}-validation-webhook
 {{- if .Values.agones.controller.validatingWebhook.annotations }}
   annotations:
 {{- toYaml .Values.agones.controller.validatingWebhook.annotations | nindent 4 }}
@@ -66,6 +66,12 @@ metadata:
     heritage: {{ .Release.Service }}
 webhooks:
   - name: validations.agones.dev
+    namespaceSelector:
+      matchExpressions:
+      - key: "kubernetes.io/metadata.name"
+        operator: "In"
+        values:
+{{- toYaml .Values.gameservers.namespaces | nindent 10 }}
     admissionReviewVersions:
       - v1
     sideEffects: None
@@ -116,7 +122,7 @@ webhooks:
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  name: agones-mutation-webhook
+  name: agones-{{ .Release.Namespace }}-mutation-webhook
 {{- if .Values.agones.controller.mutatingWebhook.annotations }}
   annotations:
 {{- toYaml .Values.agones.controller.mutatingWebhook.annotations | nindent 4 }}
@@ -129,6 +135,12 @@ metadata:
     heritage: {{ .Release.Service }}
 webhooks:
   - name: mutations.agones.dev
+    namespaceSelector:
+      matchExpressions:
+      - key: "kubernetes.io/metadata.name"
+        operator: "In"
+        values:
+{{- toYaml .Values.gameservers.namespaces | nindent 10 }}
     admissionReviewVersions:
       - v1
     sideEffects: None
