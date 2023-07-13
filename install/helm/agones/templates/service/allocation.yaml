@@ -229,6 +229,11 @@ spec:
           periodSeconds: {{ .Values.agones.allocator.readiness.periodSeconds }}
           failureThreshold: {{ .Values.agones.allocator.readiness.failureThreshold }}
         env:
+        {{- if .Values.agones.rbacScoped }}
+        # TODO list?
+        - name: SCOPED_NAMESPACES
+          value: {{ first .Values.gameservers.namespaces }}
+        {{- end }}
         {{- if .Values.agones.allocator.service.http.enabled }}
         - name: HTTP_PORT
           value: {{ .Values.agones.allocator.service.http.targetPort | quote }}

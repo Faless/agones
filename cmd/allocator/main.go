@@ -66,6 +66,7 @@ const (
 )
 
 const (
+	scopedNamespaces                 = "scoped-namespaces"
 	httpPortFlag                     = "http-port"
 	grpcPortFlag                     = "grpc-port"
 	enableStackdriverMetricsFlag     = "stackdriver-exporter"
@@ -84,6 +85,7 @@ const (
 )
 
 func parseEnvFlags() config {
+	viper.SetDefault(scopedNamespaces, "")
 	viper.SetDefault(httpPortFlag, -1)
 	viper.SetDefault(grpcPortFlag, -1)
 	viper.SetDefault(apiServerSustainedQPSFlag, 400)
@@ -99,6 +101,7 @@ func parseEnvFlags() config {
 	viper.SetDefault(logLevelFlag, "Info")
 	viper.SetDefault(allocationBatchWaitTime, 500*time.Millisecond)
 
+	pflag.String(scopedNamespaces, viper.GetString(scopedNamespaces), "A set of namespaces where to scope informers.")
 	pflag.Int32(httpPortFlag, viper.GetInt32(httpPortFlag), "Port to listen on for REST requests")
 	pflag.Int32(grpcPortFlag, viper.GetInt32(grpcPortFlag), "Port to listen on for gRPC requests")
 	pflag.Int32(apiServerSustainedQPSFlag, viper.GetInt32(apiServerSustainedQPSFlag), "Maximum sustained queries per second to send to the API server")
@@ -118,6 +121,7 @@ func parseEnvFlags() config {
 	pflag.Parse()
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	runtime.Must(viper.BindEnv(scopedNamespaces))
 	runtime.Must(viper.BindEnv(httpPortFlag))
 	runtime.Must(viper.BindEnv(grpcPortFlag))
 	runtime.Must(viper.BindEnv(apiServerSustainedQPSFlag))
@@ -139,6 +143,7 @@ func parseEnvFlags() config {
 	runtime.Must(runtime.ParseFeaturesFromEnv())
 
 	return config{
+		ScopedNamespaces:             string(viper.GetString(scopedNamespaces)),
 		HTTPPort:                     int(viper.GetInt32(httpPortFlag)),
 		GRPCPort:                     int(viper.GetInt32(grpcPortFlag)),
 		APIServerSustainedQPS:        int(viper.GetInt32(apiServerSustainedQPSFlag)),
@@ -158,6 +163,7 @@ func parseEnvFlags() config {
 }
 
 type config struct {
+	ScopedNamespaces             string
 	GRPCPort                     int
 	HTTPPort                     int
 	APIServerSustainedQPS        int
@@ -244,7 +250,7 @@ func main() {
 		os.Exit(0)
 	})
 
-	h := newServiceHandler(ctx, kubeClient, agonesClient, health, conf.MTLSDisabled, conf.TLSDisabled, conf.remoteAllocationTimeout, conf.totalRemoteAllocationTimeout, conf.allocationBatchWaitTime)
+	h := newServiceHandler(ctx, kubeClient, agonesClient, health, conf.MTLSDisabled, conf.TLSDisabled, conf.remoteAllocationTimeout, conf.totalRemoteAllocationTimeout, conf.allocationBatchWaitTime, conf.ScopedNamespaces)
 
 	if !h.tlsDisabled {
 		cancelTLS, err := fswatch.Watch(logger, tlsDir, time.Second, func() {
@@ -378,10 +384,17 @@ func runGRPC(h *serviceHandler, grpcPort int) {
 	}()
 }
 
-func newServiceHandler(ctx context.Context, kubeClient kubernetes.Interface, agonesClient versioned.Interface, health healthcheck.Handler, mTLSDisabled bool, tlsDisabled bool, remoteAllocationTimeout time.Duration, totalRemoteAllocationTimeout time.Duration, allocationBatchWaitTime time.Duration) *serviceHandler {
+func newServiceHandler(ctx context.Context, kubeClient kubernetes.Interface, agonesClient versioned.Interface, health healthcheck.Handler, mTLSDisabled bool, tlsDisabled bool, remoteAllocationTimeout time.Duration, totalRemoteAllocationTimeout time.Duration, allocationBatchWaitTime time.Duration, scopedNamespaces string) *serviceHandler {
 	defaultResync := 30 * time.Second
 	agonesInformerFactory := externalversions.NewSharedInformerFactory(agonesClient, defaultResync)
 	kubeInformerFactory := informers.NewSharedInformerFactory(kubeClient, defaultResync)
+
+	// TODO Can we make ScopedNamespaces a list?
+	if len(scopedNamespaces) > 0 {
+		agonesInformerFactory = externalversions.NewSharedInformerFactoryWithOptions(agonesClient, defaultResync, externalversions.WithNamespace(scopedNamespaces))
+		kubeInformerFactory = informers.NewSharedInformerFactoryWithOptions(kubeClient, defaultResync, informers.WithNamespace(scopedNamespaces))
+	}
+
 	gsCounter := gameservers.NewPerNodeCounter(kubeInformerFactory, agonesInformerFactory)
 
 	allocator := gameserverallocations.NewAllocator(

@@ -26,6 +26,7 @@ agones:
       enabled: false
       interval: 30s
   rbacEnabled: true
+  rbacScoped: false
   registerServiceAccounts: true
   registerWebhooks: true
   registerApiService: true

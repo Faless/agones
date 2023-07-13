@@ -104,6 +104,11 @@ spec:
         image: "{{ .Values.agones.image.registry }}/{{ .Values.agones.image.controller.name}}:{{ default .Values.agones.image.tag .Values.agones.image.controller.tag }}"
         imagePullPolicy: {{ .Values.agones.image.controller.pullPolicy }}
         env:
+        {{- if .Values.agones.rbacScoped }}
+        # TODO list?
+        - name: SCOPED_NAMESPACES
+          value: {{ first .Values.gameservers.namespaces }}
+        {{- end }}
         # minimum port that can be exposed to GameServer traffic
         - name: MIN_PORT
           value: {{ .Values.gameservers.minPort | quote }}

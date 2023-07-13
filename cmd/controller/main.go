@@ -72,6 +72,7 @@ const (
 	pullSidecarFlag              = "always-pull-sidecar"
 	minPortFlag                  = "min-port"
 	maxPortFlag                  = "max-port"
+	scopedNamespaces             = "scoped-namespaces"
 	certFileFlag                 = "cert-file"
 	keyFileFlag                  = "key-file"
 	numWorkersFlag               = "num-workers"
@@ -173,6 +174,12 @@ func main() {
 	agonesInformerFactory := externalversions.NewSharedInformerFactory(agonesClient, defaultResync)
 	kubeInformerFactory := informers.NewSharedInformerFactory(kubeClient, defaultResync)
 
+	// TODO Can we make ScopedNamespaces a list?
+	if len(ctlConf.ScopedNamespaces) > 0 {
+		agonesInformerFactory = externalversions.NewSharedInformerFactoryWithOptions(agonesClient, defaultResync, externalversions.WithNamespace(ctlConf.ScopedNamespaces))
+		kubeInformerFactory = informers.NewSharedInformerFactoryWithOptions(kubeClient, defaultResync, informers.WithNamespace(ctlConf.ScopedNamespaces))
+	}
+
 	server := &httpServer{}
 	var rs []runner
 	var health healthcheck.Handler
@@ -269,6 +276,7 @@ func parseEnvFlags() config {
 	}
 
 	base := filepath.Dir(exec)
+	viper.SetDefault(scopedNamespaces, "")
 	viper.SetDefault(sidecarImageFlag, "us-docker.pkg.dev/agones-images/release/agones-sdk:"+pkg.Version)
 	viper.SetDefault(sidecarCPURequestFlag, "0")
 	viper.SetDefault(sidecarCPULimitFlag, "0")
@@ -302,6 +310,7 @@ func parseEnvFlags() config {
 	pflag.String(sdkServerAccountFlag, viper.GetString(sdkServerAccountFlag), "Overwrite what service account default for GameServer Pods. Defaults to Can also use SDK_SERVICE_ACCOUNT")
 	pflag.Int32(minPortFlag, 0, "Required. The minimum port that that a GameServer can be allocated to. Can also use MIN_PORT env variable.")
 	pflag.Int32(maxPortFlag, 0, "Required. The maximum port that that a GameServer can be allocated to. Can also use MAX_PORT env variable")
+	pflag.String(scopedNamespaces, viper.GetString(scopedNamespaces), "A set of namespaces where to scope informers.")
 	pflag.String(keyFileFlag, viper.GetString(keyFileFlag), "Optional. Path to the key file")
 	pflag.String(certFileFlag, viper.GetString(certFileFlag), "Optional. Path to the crt file")
 	pflag.String(kubeconfigFlag, viper.GetString(kubeconfigFlag), "Optional. kubeconfig to run the controller out of the cluster. Only use it for debugging as webhook won't works.")
@@ -332,6 +341,7 @@ func parseEnvFlags() config {
 	runtime.Must(viper.BindEnv(sdkServerAccountFlag))
 	runtime.Must(viper.BindEnv(minPortFlag))
 	runtime.Must(viper.BindEnv(maxPortFlag))
+	runtime.Must(viper.BindEnv(scopedNamespaces))
 	runtime.Must(viper.BindEnv(keyFileFlag))
 	runtime.Must(viper.BindEnv(certFileFlag))
 	runtime.Must(viper.BindEnv(kubeconfigFlag))
@@ -377,6 +387,7 @@ func parseEnvFlags() config {
 	return config{
 		MinPort:                 int32(viper.GetInt64(minPortFlag)),
 		MaxPort:                 int32(viper.GetInt64(maxPortFlag)),
+		ScopedNamespaces:        viper.GetString(scopedNamespaces),
 		SidecarImage:            viper.GetString(sidecarImageFlag),
 		SidecarCPURequest:       requestCPU,
 		SidecarCPULimit:         limitCPU,
@@ -407,6 +418,7 @@ func parseEnvFlags() config {
 type config struct {
 	MinPort                 int32
 	MaxPort                 int32
+	ScopedNamespaces        string
 	SidecarImage            string
 	SidecarCPURequest       resource.Quantity
 	SidecarCPULimit         resource.Quantity
