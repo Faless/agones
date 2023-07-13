@@ -30,15 +30,16 @@ metadata:
 ---
 {{- end }}
 {{- if .Values.agones.rbacEnabled }}
+  {{- range .Values.gameservers.namespaces }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ .Values.agones.serviceaccount.sdk.name }}
+  name: {{ $.Values.agones.serviceaccount.sdk.name }}
   labels:
     app: {{ template "agones.name" . }}
     chart: {{ template "agones.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    release: {{ $.Release.Name }}
+    heritage: {{ $.Release.Service }}
 rules:
 - apiGroups: [""]
   resources: ["events"]
@@ -47,7 +48,6 @@ rules:
   resources: ["gameservers"]
   verbs: ["list", "update", "watch"]
 ---
-  {{- range .Values.gameservers.namespaces }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -64,7 +64,7 @@ subjects:
   apiGroup: rbac.authorization.k8s.io
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: Role
   name: {{ $.Values.agones.serviceaccount.sdk.name }}
 ---
   {{- end }}
